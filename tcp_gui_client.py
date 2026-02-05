@@ -20,6 +20,7 @@ class TcpGuiClient:
         self.status_var = tk.StringVar(value="Nicht verbunden")
 
         self._build_ui()
+        # Non-printable prefix added before sending messages.       
 
     def _build_ui(self) -> None:
         connection_frame = ttk.LabelFrame(self.root, text="Verbindung")
@@ -45,6 +46,8 @@ class TcpGuiClient:
         logs_frame.pack(fill="both", expand=True, padx=12, pady=8)
 
         self.log_text = ScrolledText(logs_frame, wrap="word", state="disabled")
+        self.log_text.tag_config("sent", foreground="#1b8f3a")
+        self.log_text.tag_config("recv", foreground="#1f5fbf")
         self.log_text.pack(fill="both", expand=True, padx=8, pady=8)
 
         send_frame = ttk.LabelFrame(self.root, text="Nachricht senden")
@@ -131,11 +134,13 @@ class TcpGuiClient:
             return
 
         message = self.message_entry.get("1.0", "end").rstrip("\n")
+        message = message.replace("\r\n", "\n")
         if not message:
             return
 
         try:
-            self.sock.sendall(message.encode("utf-8"))
+            payload = message.encode("utf-8")
+            self.sock.sendall(payload)
             self._append_log("GESENDET", message)
             self.message_entry.delete("1.0", "end")
         except OSError as exc:
@@ -161,11 +166,28 @@ class TcpGuiClient:
             self.disconnect()
 
     def _append_log(self, tag: str, message: str) -> None:
+        tag_key = self._tag_key_for_log(tag)
         self.log_text.config(state="normal")
         for line in message.splitlines() or [""]:
-            self.log_text.insert("end", f"[{tag}] {line}\n")
+            if tag_key:
+                self.log_text.insert("end", f"[{tag}] {line}\n", tag_key)
+            else:
+                self.log_text.insert("end", f"[{tag}] {line}\n")
         self.log_text.see("end")
         self.log_text.config(state="disabled")
+
+    def _tag_key_for_log(self, tag: str) -> str:
+        if tag == "GESENDET":
+            return "sent"
+        if tag == "EMPFANGEN":
+            return "recv"
+        return ""
+
+    def _format_prefix_for_log(self, data: bytes) -> str:
+        if not data:
+            return ""
+        hex_parts = " ".join(f"0x{b:02X}" for b in data)
+        return f"<{hex_parts}> "
 
     def clear_input(self) -> None:
         self.message_entry.delete("1.0", "end")
