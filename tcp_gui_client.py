@@ -139,7 +139,7 @@ class TcpGuiClient:
             return
 
         try:
-            payload = message.encode("utf-8")
+            payload = self._prepare_payload(message)
             self.sock.sendall(payload)
             self._append_log("GESENDET", message)
             self.message_entry.delete("1.0", "end")
@@ -188,6 +188,11 @@ class TcpGuiClient:
             return ""
         hex_parts = " ".join(f"0x{b:02X}" for b in data)
         return f"<{hex_parts}> "
+
+    def _prepare_payload(self, message: str) -> bytes:
+        """Adjust outgoing packet so the literal '</REHM>' delimiter is not present."""
+        adjusted_message = message.replace("</REHM>", "</REHM\x00>")
+        return adjusted_message.encode("utf-8")
 
     def clear_input(self) -> None:
         self.message_entry.delete("1.0", "end")
